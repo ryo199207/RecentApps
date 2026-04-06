@@ -1,368 +1,196 @@
 package com.crispim.recentapps
 
-import android.content.ComponentName
-import android.content.Context
+import android.app.AppOpsManager
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
-import android.text.TextUtils
-import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.ScreenRotation
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
+import android.view.Gravity
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
 
-class MainActivity : ComponentActivity() {
+/**
+ * 初期セットアップ画面。
+ * 必要な権限をユーザーに案内する。
+ */
+class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        try {
-            super.onCreate(savedInstanceState)
+        super.onCreate(savedInstanceState)
 
-            val primaryColor = Color(0xFF0D47A1)
-            val secondaryColor = Color(0xFF90CAF9)
-            val backgroundColor = Color(0xFFE3F2FD)
-            val surfaceColor = Color.White
-
-            val customColorScheme = lightColorScheme(
-                primary = primaryColor,
-                onPrimary = Color.White,
-                secondary = secondaryColor,
-                onSecondary = Color.Black,
-                background = backgroundColor,
-                surface = surfaceColor,
-                onSurface = Color.Black
-            )
-
-            setContent {
-                MaterialTheme(colorScheme = customColorScheme) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        SettingsScreen()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                "onCreate Error: ${e.message}",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    @Composable
-    fun SettingsScreen() {
-        val context = LocalContext.current
-        var showDisclosureDialog by remember { mutableStateOf(false) }
-        var hasAccessibilityPermission by remember {
-            mutableStateOf(isAccessibilityServiceEnabled(context, MainService::class.java))
-        }
-
-        DisposableEffect(context as LifecycleOwner) {
-            val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) {
-                    hasAccessibilityPermission =
-                        isAccessibilityServiceEnabled(context, MainService::class.java)
-                }
-            }
-            context.lifecycle.addObserver(observer)
-            onDispose {
-                context.lifecycle.removeObserver(observer)
-            }
-        }
-
-        if (showDisclosureDialog) {
-            AccessibilityDisclosureDialog(
-                onConfirm = {
-                    showDisclosureDialog = false
-                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                    context.startActivity(intent)
-                },
-                onDismiss = { showDisclosureDialog = false }
+        val scroll = ScrollView(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val dp = resources.displayMetrics.density
+            setPadding(
+                (24 * dp).toInt(), (60 * dp).toInt(),
+                (24 * dp).toInt(), (40 * dp).toInt()
             )
         }
+        scroll.addView(root)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // タイトル
+        root.addView(TextView(this).apply {
+            text = "RecentApps セットアップ"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, (8 * resources.displayMetrics.density).toInt())
+        })
+
+        root.addView(TextView(this).apply {
+            text = "カバー画面でメイン画面・カバー画面両方の最近アプリを表示します"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            alpha = 0.7f
+            setPadding(0, 0, 0, (32 * resources.displayMetrics.density).toInt())
+        })
+
+        // Step 1: 使用状況へのアクセス
+        addPermissionStep(
+            root,
+            stepNum = "1",
+            title = "使用状況へのアクセス",
+            description = "メイン画面・カバー画面両方のアプリ履歴を取得するために必要です。\n" +
+                    "「RecentApps」をONにしてください。",
+            buttonLabel = "権限を設定 →"
         ) {
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(16.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.ScreenRotation,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    text = "RecentApps",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
-
-            if (!hasAccessibilityPermission) {
-                WarningCard(
-                    title = "Warning",
-                    message = "For the app to function correctly, please grant the required permission."
-                )
-            }
-
-            // GoodLock Warning
-            WarningCard(
-                title = "Warning",
-                message = "Do not add this app to GoodLock. Doing so will prevent the service from working correctly."
-            )
-
-            if (!hasAccessibilityPermission) {
-                InfoCard(title = "Required Permission") {
-                    ConfigButton(
-                        text = "Enable Accessibility Service",
-                        onClick = {
-                            showDisclosureDialog = true
-                        }
-                    )
-                }
-            }
-
-            InfoCard(title = "Settings") {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Service Status",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = if (hasAccessibilityPermission) "Service is active. Long-press the Home button to open Recent Apps. (Note: Gesture navigation is not supported yet)" else "Service needs permission",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                }
-            }
-
-            OutlinedButton(
-                onClick = {
-                    val url = "https://www.paypal.com/paypalme/crispim1411"
-                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-                    context.startActivity(intent)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text(text = "Buy me an Ice Cream ($1)")
-            }
-
-            OutlinedButton(
-                onClick = {
-                    val url = "https://github.com/crispim1411/RecentApps/issues"
-                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-                    context.startActivity(intent)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text(text = "A Bug? Report it!")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
-    }
 
-    @Composable
-    fun InfoCard(title: String, content: @Composable () -> Unit) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        // Step 2: ユーザー補助サービス
+        addPermissionStep(
+            root,
+            stepNum = "2",
+            title = "ユーザー補助サービス",
+            description = "アプリ起動の追跡とオーバーレイ表示に必要です。\n" +
+                    "「RecentApps」をONにしてください。",
+            buttonLabel = "ユーザー補助を設定 →"
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                content()
-            }
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-    }
 
-    @Composable
-    fun WarningCard(title: String, message: String) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Rounded.Info, contentDescription = "Warning", tint = Color(0xFFFBC02D))
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color(0xFFFBC02D),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = Color.DarkGray
-                )
-            }
-        }
-    }
-
-    @Composable
-    fun ConfigButton(text: String, onClick: () -> Unit) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                contentColor = MaterialTheme.colorScheme.primary
-            ),
-            elevation = ButtonDefaults.buttonElevation(0.dp)
-        ) {
-            Text(text)
-        }
-    }
-
-    @Composable
-    fun AccessibilityDisclosureDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = {
-                Text(
-                    text = "Accessibility API Usage",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = "This app requires the Accessibility Service API to provide its core functionality: Long-press the Home button to open Recent Apps.\n\n" +
-                            "• We DO NOT collect, store, or share any personal or sensitive data from your screen.\n" +
-                            "• You can disable this permission at any time in the system settings."
-                )
-            },
-            confirmButton = {
-                Button(onClick = onConfirm) {
-                    Text("Accept and Enable")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Decline")
-                }
-            },
-            shape = RoundedCornerShape(24.dp)
+        // Step 3: QuickSettingsタイルの追加方法
+        addInfoStep(
+            root,
+            stepNum = "3",
+            title = "クイック設定タイルを追加",
+            description = "クイック設定パネルを開いて編集モードにし、\n" +
+                    "「最近のアプリ」タイルをパネルに追加してください。\n\n" +
+                    "カバー画面でも同様にタイルを追加できます。"
         )
+
+        // 状態表示
+        val statusText = TextView(this).apply {
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding(0, (24 * resources.displayMetrics.density).toInt(), 0, 0)
+        }
+        root.addView(statusText)
+        statusView = statusText
+
+        setContentView(scroll)
     }
 
-    private fun isAccessibilityServiceEnabled(context: Context, service: Class<*>): Boolean {
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
+    private var statusView: TextView? = null
+
+    override fun onResume() {
+        super.onResume()
+        updateStatus()
+    }
+
+    private fun updateStatus() {
+        val hasUsage = hasUsageStatsPermission()
+        val hasA11y = isAccessibilityEnabled()
+
+        statusView?.text = when {
+            hasUsage && hasA11y ->
+                "✅ セットアップ完了！\nカバー画面のクイック設定から\n「最近のアプリ」をタップして使ってください。"
+            !hasUsage && !hasA11y ->
+                "⚠️ Step 1, 2 の設定が必要です"
+            !hasUsage ->
+                "⚠️ Step 1 (使用状況へのアクセス) が必要です"
+            else ->
+                "⚠️ Step 2 (ユーザー補助) が必要です"
+        }
+    }
+
+    private fun hasUsageStatsPermission(): Boolean {
+        val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            packageName
+        )
+        return mode == AppOpsManager.MODE_ALLOWED
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val enabled = Settings.Secure.getString(
+            contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
+        return enabled.contains(packageName, ignoreCase = true)
+    }
 
-        val colonSplitter = TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(enabledServices)
+    // -----------------------------------------------------------------------
+    // UI ヘルパー
+    // -----------------------------------------------------------------------
 
-        val componentName = ComponentName(context, service)
-        val flatName = componentName.flattenToString()
-
-        while (colonSplitter.hasNext()) {
-            val component = colonSplitter.next()
-            if (component.equals(flatName, ignoreCase = true)) {
-                return true
-            }
+    private fun addPermissionStep(
+        parent: LinearLayout,
+        stepNum: String,
+        title: String,
+        description: String,
+        buttonLabel: String,
+        action: () -> Unit
+    ) {
+        val dp = resources.displayMetrics.density
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, (28 * dp).toInt())
         }
-        return false
+
+        section.addView(TextView(this).apply {
+            text = "Step $stepNum: $title"
+            textSize = 16f
+            setPadding(0, 0, 0, (6 * dp).toInt())
+        })
+        section.addView(TextView(this).apply {
+            text = description
+            textSize = 13f
+            alpha = 0.75f
+            setPadding(0, 0, 0, (12 * dp).toInt())
+        })
+        section.addView(Button(this).apply {
+            text = buttonLabel
+            setOnClickListener { action() }
+        })
+
+        parent.addView(section)
+    }
+
+    private fun addInfoStep(
+        parent: LinearLayout,
+        stepNum: String,
+        title: String,
+        description: String
+    ) {
+        val dp = resources.displayMetrics.density
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, (28 * dp).toInt())
+        }
+
+        section.addView(TextView(this).apply {
+            text = "Step $stepNum: $title"
+            textSize = 16f
+            setPadding(0, 0, 0, (6 * dp).toInt())
+        })
+        section.addView(TextView(this).apply {
+            text = description
+            textSize = 13f
+            alpha = 0.75f
+        })
+
+        parent.addView(section)
     }
 }
